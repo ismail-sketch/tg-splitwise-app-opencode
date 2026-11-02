@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import BotCommand, Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.filters import Command
 
 load_dotenv()
@@ -183,6 +183,10 @@ def get_user_groups(user_id: int):
     conn.close()
     return {"success": True, "groups": [dict(g) for g in groups]}
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.post("/api/groups")
 def create_group(data: GroupCreate):
     conn = get_db()
@@ -281,7 +285,11 @@ def join_group(data: JoinGroup):
     conn.close()
     return {"success": True}
 
-# --- TELEGRAM BOT (AIOGRAM) ---
+def make_kb(url: str, text: str):
+    if url.startswith("https://"):
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]])
+    return None
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -303,27 +311,26 @@ def db_ensure_user(user):
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     db_ensure_user(message.from_user)
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Открыть Mini App", web_app=WebAppInfo(url=WEBAPP_URL))]
-    ])
-    await message.answer(
+    keyboard = make_kb(WEBAPP_URL, "📊 Открыть Mini App")
+    text = (
         f"👋 Привет, {message.from_user.first_name}!\n\n"
         "Я бот для совместного учета расходов и долгов (Splitwise).\n\n"
-        "✨ **Команды:**\n"
-        "• `/newgroup <название>` — создать группу\n"
-        "• `/add <сумма> <описание>` — добавить расход\n"
-        "• `/debts` — баланс и расчет долгов\n\n"
-        "Нажми кнопку ниже, чтобы открыть Mini App! 👇",
-        parse_mode="Markdown",
-        reply_markup=keyboard
+        "✨ Команды:\n"
+        "• /newgroup <название> — создать группу\n"
+        "• /add <сумма> <описание> — добавить расход\n"
+        "• /debts — баланс и расчет долгов\n\n"
     )
+    if keyboard is None:
+        text += "Mini App будет доступен после подключения публичного HTTPS-адреса."
+
+    await message.answer(text, reply_markup=keyboard)
 
 @dp.message(Command("newgroup"))
 async def cmd_newgroup(message: Message):
     db_ensure_user(message.from_user)
     title = message.text.replace("/newgroup", "").strip()
     if not title:
-        await message.answer("⚠️ Укажите название группы. Пример: `/newgroup Поездка`", parse_mode="Markdown")
+        await message.answer("⚠️ Укажите название группы. Пример: /newgroup Поездка")
         return
 
     user_id = message.from_user.id
@@ -336,11 +343,12 @@ async def cmd_newgroup(message: Message):
     conn.close()
 
     group_url = f"{WEBAPP_URL}?groupId={group_id}"
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"📊 Открыть '{title}'", web_app=WebAppInfo(url=group_url))]
-    ])
+    keyboard = make_kb(group_url, f"📊 Открыть '{title}'")
+    resp_text = f"🎉 Группа «{title}» создана!\nID группы: {group_id}"
+    if keyboard is None:
+        resp_text += "\nMini App пока работает только локально. Команды бота уже доступны."
 
-    await message.answer(f"🎉 Группа **'{title}'** создана!\nID группы: `{group_id}`", parse_mode="Markdown", reply_markup=keyboard)
+    await message.answer(resp_text, reply_markup=keyboard)
 
 @dp.message(Command("debts"))
 async def cmd_debts(message: Message):
@@ -357,7 +365,7 @@ async def cmd_debts(message: Message):
 
     if not last_group:
         conn.close()
-        await message.answer("У вас нет групп. Создайте группу командой `/newgroup <название>`", parse_mode="Markdown")
+        await message.answer("У вас нет групп. Создайте группу командой /newgroup <название>")
         return
 
     group_id = last_group["id"]
@@ -385,17 +393,15 @@ async def cmd_debts(message: Message):
     debts = calculate_simplified_debts(members, expenses)
 
     if not debts:
-        await message.answer(f"🤝 В группе **'{group_title}'** все долги закрыты!", parse_mode="Markdown")
+        await message.answer(f"🤝 В группе «{group_title}» все долги закрыты!")
         return
 
-    text = f"💰 **Баланс в группе '{group_title}':**\n\n"
+    text = f"💰 Баланс в группе «{group_title}»:\n\n"
     for d in debts:
-        text += f"• **{d['fromName']}** ➡️ **{d['amount']:.2f} ₽** ➡️ **{d['toName']}**\n"
+        text += f"• {d['fromName']} ➡️ {d['amount']:.2f} ₽ ➡️ {d['toName']}\n"
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Открыть Mini App", web_app=WebAppInfo(url=f"{WEBAPP_URL}?groupId={group_id}"))]
-    ])
-    await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+    keyboard = make_kb(f"{WEBAPP_URL}?groupId={group_id}", "📊 Открыть Mini App")
+    await message.answer(text, reply_markup=keyboard)
 
 @dp.message(Command("add"))
 async def cmd_add(message: Message):
@@ -404,7 +410,7 @@ async def cmd_add(message: Message):
     parts = message.text.replace("/add", "").strip().split(" ", 1)
 
     if len(parts) < 2:
-        await message.answer("⚠️ Формат: `/add <сумма> <описание>`\nПример: `/add 1200 Обед в кафе`", parse_mode="Markdown")
+        await message.answer("⚠️ Формат: /add <сумма> <описание>\nПример: /add 1200 Обед в кафе")
         return
 
     try:
@@ -425,7 +431,7 @@ async def cmd_add(message: Message):
 
     if not last_group:
         conn.close()
-        await message.answer("Сначала создайте группу с помощью `/newgroup <название>`", parse_mode="Markdown")
+        await message.answer("Сначала создайте группу с помощью /newgroup <название>")
         return
 
     group_id = last_group["id"]
@@ -449,12 +455,15 @@ async def cmd_add(message: Message):
     conn.close()
 
     await message.answer(
-        f"✅ Расход записан в группу **'{group_title}'**!\n"
-        f"💳 Сумма: **{amount:.2f} ₽**\n"
+        f"✅ Расход записан в группу «{group_title}»!\n"
+        f"💳 Сумма: {amount:.2f} ₽\n"
         f"📝 {description}\n"
-        f"👥 Разделено на {len(member_ids)} участн. (~{split_amount:.2f} ₽ на каждого)",
-        parse_mode="Markdown"
+        f"👥 Разделено на {len(member_ids)} участн. (~{split_amount:.2f} ₽ на каждого)"
     )
+
+@dp.message()
+async def unknown_message(message: Message):
+    await message.answer("Не понял сообщение. Используйте /start, /newgroup, /add или /debts.")
 
 async def main():
     import uvicorn
@@ -464,6 +473,14 @@ async def main():
     # We can run uvicorn server in a separate task or start bot polling
     config = uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info")
     server = uvicorn.Server(config)
+
+    await bot.delete_webhook(drop_pending_updates=False)
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Открыть меню бота"),
+        BotCommand(command="newgroup", description="Создать группу расходов"),
+        BotCommand(command="add", description="Добавить расход"),
+        BotCommand(command="debts", description="Посмотреть долги"),
+    ])
 
     # Start bot polling and FastAPI concurrently
     await asyncio.gather(
