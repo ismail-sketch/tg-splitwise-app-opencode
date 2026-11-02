@@ -1,41 +1,65 @@
-# 📊 Telegram Splitwise App (Бот + Telegram Mini App)
+# 📊 Telegram Splitwise App (Bot + Telegram Mini App)
 
-Совместный трекер расходов и долгов для Telegram в формате гибридного бота и Telegram Mini App (TMA).
+Полнофункциональный трекер совместных расходов и долгов для Telegram, состоящий из асинхронного Telegram-бота и интерактивного Telegram Mini App (TMA).
 
 ## 🚀 Стек технологий
 
-- **Backend / Bot:** Node.js, TypeScript, [grammY](https://grammy.dev/) (Telegram Bot Framework), Express/Fastify API, SQLite (`better-sqlite3` / Kysely / Drizzle)
-- **Frontend / Mini App:** React, Vite, TypeScript, Tailwind CSS, `@telegram-apps/sdk`
-- **Алгоритмы:** Упрощение графа долгов (Debt Settlement Algorithm), учет категорий и валют
+- **Backend / Bot:** Python 3, FastAPI, aiogram 3, SQLite (встроенная база данных без внешних компиляций).
+- **Frontend / Mini App:** React, Vite, TypeScript, Tailwind CSS, Telegram WebApp SDK.
+- **Алгоритмы:** Алгоритм минимизации и упрощения взаимных долгов (Splitwise Debt Simplification).
+
+---
 
 ## 📁 Структура проекта
 
 ```
 tg-splitwise-app/
-├── bot/               # Бэкенд бота и API для Telegram Mini App
-│   ├── src/
-│   │   ├── bot/       # Команды и диалоги бота grammY
-│   │   ├── api/       # REST API для связи с Mini App
-│   │   ├── db/        # База данных SQLite и миграции
-│   │   └── services/  # Расчет долгов, аналитика, валюты
-│   └── package.json
-├── webapp/            # Фронтенд Telegram Mini App (React + Vite)
-│   ├── src/
-│   │   ├── components/# Интерактивные графики, списки расходов, формы
-│   │   ├── hooks/     # Telegram WebApp SDK хуки
-│   │   └── api/       # Запросы к бэкенду
-│   └── package.json
-└── README.md
+├── bot/                # Python бэкенд, FastAPI REST API и aiogram бот
+│   ├── main.py         # Основной файл запуска бэкенда и бота
+│   ├── requirements.txt# Зависимости Python
+│   └── database.sqlite # SQLite база данных
+└── webapp/             # React + Vite Telegram Mini App фронтенд
+    ├── src/
+    │   ├── App.tsx     # Главный интерфейс Mini App (балансы, графики, долги)
+    │   └── ...
+    ├── package.json
+    └── vite.config.ts
 ```
 
-## 🛠 Подключение к GitHub
+---
 
-Чтобы привязать этот локальный репозиторий к GitHub:
+## ⚙️ Инструкция по запуску
 
-1. Создайте новый репозиторий на GitHub (например, `tg-splitwise-app`).
-2. В терминале выполните команды:
-```bash
-git remote add origin https://github.com/ВАШ_USERNAME/tg-splitwise-app.git
-git branch -M main
-git push -u origin main
-```
+### 1. Запуск Backend (Бот + API)
+
+1. Перейдите в папку `bot/`:
+   ```bash
+   cd bot
+   ```
+2. Установите зависимости:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Создайте файл `.env` на основе примера или настройте переменные:
+   - `BOT_TOKEN` — токен вашего Telegram-бота от `@BotFather`
+   - `WEBAPP_URL` — URL вашего Mini App (например, `http://localhost:5173`)
+4. Запустите бэкенд:
+   ```bash
+   python main.py
+   ```
+
+### 2. Запуск Telegram Mini App (Фронтенд)
+
+1. Перейдите в папку `webapp/`:
+   ```bash
+   cd webapp
+   ```
+2. Установите зависимости:
+   ```bash
+   npm install
+   ```
+3. Запустите dev-сервер:
+   ```bash
+   npm run dev
+   ```
+4. Откройте локальный адрес (обычно `http://localhost:5173`) в браузере или привяжите к WebApp в BotFather.
