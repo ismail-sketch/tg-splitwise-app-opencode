@@ -6,6 +6,8 @@ node_modules/
 dist/
 build/
 .vite/
+__pycache__/
+*.py[cod]
 
 # Environment and secrets
 .env
